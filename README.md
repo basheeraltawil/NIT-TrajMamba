@@ -22,38 +22,7 @@ Jetson Orin.
 
 ---
 
-## Key idea: one pipeline for training and deployment
 
-Most trajectory predictors are trained on clean, smoothed, top-down benchmark
-tracks, then deployed on noisy pose landmarks and gap-ridden depth from a
-forward-facing camera — an input distribution the model never saw during
-training.
-
-This package removes that gap by construction. **The same preprocessing module
-runs in both phases**: identical RGB-depth association, MediaPipe pose
-extraction, depth back-projection, and Kalman/EMA filtering. Normalisation
-statistics are stored inside the checkpoint, so the deployed node cannot
-normalise its input differently from how the model was trained.
-
----
-
-## Results
-
-ETH/UCY benchmark, leave-one-scene-out protocol, deterministic (*K* = 1)
-predictions. ADE / FDE in metres, lower is better.
-
-| Scene | STGAT | Social-STGCNN | DTGAN | **TrajMamba (ours)** |
-|-------|-------|---------------|-------|----------------------|
-| ETH   | 0.57 / 0.89 | 0.64 / 1.11 | 0.68 / 1.43 | **0.55 / 0.85** |
-| UNIV  | 0.49 / 0.96 | 0.44 / 0.79 | 0.51 / 1.07 | **0.31 / 0.58** |
-| ZARA1 | 0.29 / 0.59 | 0.34 / 0.53 | 0.31 / 0.67 | **0.22 / 0.38** |
-| ZARA2 | 0.24 / 0.54 | 0.30 / 0.48 | 0.28 / 0.59 | **0.17 / 0.31** |
-| HOTEL | 0.41 / 0.86 | 0.49 / 0.85 | 0.30 / 0.52 | **0.20 / 0.43** |
-| **AVG** | 0.40 / 0.77 | 0.44 / 0.75 | 0.42 / 0.85 | **0.29 / 0.51** |
-
-Full comparison against all eight baselines is in the paper.
-
----
 
 ## Requirements
 
