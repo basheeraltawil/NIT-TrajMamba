@@ -5,7 +5,7 @@
 > **Real-Time Human Trajectory Prediction from RGB-D for Mobile Robots Using Bi-Mamba**
 > Basheer Al-Tawil, Magnus Jung, Ayoub Al-Hamadi
 > *International Conference on Control, Mechatronics and Automation (ICCMA), 2026*
-> [[Paper]](https://doi.org/PLACEHOLDER) · 
+> [[Paper]](https://.. · 
 
 A ROS 2 package for multi-person 3D trajectory estimation and short-horizon
 future-trajectory prediction. It detects the hip centre with MediaPipe Pose,
