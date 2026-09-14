@@ -1,0 +1,21 @@
+
+torch>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.6.0
+mediapipe
+requests
+# Live demo (camera streaming + tracking)
+opencv-python>=4.7.0
+# For RealSense depth (install from Intel package index if pip fails):
+# pyrealsense2
+
+# Optional: fast CUDA Mamba kernels (Linux + NVIDIA GPU only)
+# Install with:  pip install mamba-ssm causal-conv1d --no-build-isolation
+# If not installed, the pure-PyTorch SSM fallback is used automatically.
+mamba-ssm>=1.2.0
+# causal-conv1d>=1.4.0
+
+# Development / analysis (optional)
+# tensorboard>=2.13.0
+# tqdm>=4.65.0
+# pandas>=2.0.0

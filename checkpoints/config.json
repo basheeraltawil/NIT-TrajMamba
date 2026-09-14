@@ -1,0 +1,48 @@
+{
+  "dataset_roots": [
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_person_tracking",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_crowd",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_crowd2",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_crowd3",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_balloon_tracking2",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_placing_nonobstructing_box",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_moving_nonobstructing_box2",
+    "/media/basheer/OVGU/Datasets/rgbd_bonn_dataset/rgbd_bonn_moving_obstructing_box"
+  ],
+  "checkpoint_dir": "/home/basheer/basheer_ws/src/nit_human_traj_estimation/checkpoints/best_model.pth",
+  "resume": false,
+  "obs_len": 20,
+  "pred_len": 30,
+  "downsample": 3,
+  "use_3d": true,
+  "val_fraction": 0.15,
+  "seed": 42,
+  "d_model": 64,
+  "d_state": 16,
+  "d_conv": 4,
+  "expand": 2,
+  "n_layers": 3,
+  "dropout": 0.3,
+  "epochs": 150,
+  "batch_size": 32,
+  "lr": 0.0005,
+  "T0": 30,
+  "T_mult": 2,
+  "patience": 25,
+  "num_workers": 4,
+  "log_every": 20,
+  "pos_dim": 3,
+  "n_params": 560515,
+  "device": "cuda",
+  "timestamp": "2026-05-21T12:50:36.815611",
+  "vel_mean": [
+    -0.0016536879120394588,
+    -0.0011199561413377523,
+    9.756164945429191e-05
+  ],
+  "vel_std": [
+    0.010842504911124706,
+    0.010113978758454323,
+    0.010076838545501232
+  ]
+}

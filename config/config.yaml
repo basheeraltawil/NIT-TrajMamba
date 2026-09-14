@@ -1,0 +1,57 @@
+nit_human_traj_estimation:
+  ros__parameters:
+    # ----- Model / checkpoint paths -----
+    # Relative paths are resolved against the package's installed share
+    # directory (share/nit_human_traj_estimation/checkpoints/...).
+    # Absolute paths are used as-is.
+    checkpoint_path: 'checkpoints/best_model.pth'
+    pose_landmarker_task: 'checkpoints/pose_landmarker.task'
+    # If either file above is missing at startup, it's auto-downloaded from
+    # here (folder or single-file Nextcloud share) — mirrors
+    # nit_pose_estimation's checkpoint auto-download behavior.
+    checkpoints_url: 'https://cloud.ovgu.de/s/JLQQa6f2e8qb5gn'
+
+    # ----- Input topics -----
+    rgb_topic: '/head_front_camera/rgb/image_raw'
+    depth_topic: '/head_front_camera/depth/image_raw'
+    camera_info_topic: '/head_front_camera/rgb/camera_info'
+    # Must be the *optical* frame, not a plain "_rgb_frame" -- hip_center_3d's
+    # deprojection (X=(u-cx)*z/fx, Y=(v-cy)*z/fy, Z=depth) produces points in
+    # the standard ROS optical convention (Z-forward, X-right, Y-down), not
+    # REP-103's physical convention (X-forward, Y-left, Z-up). Confirmed live
+    # against this robot's actual RGB image header
+    # (`ros2 topic echo /head_front_camera/rgb/image_raw --once`) rather than
+    # assumed -- a differently-named/differently-conventioned frame here
+    # would misplace every downstream TF transform (including
+    # social_traj_costmap_plugin's) silently, since a missing frame just
+    # fails the lookup quietly rather than erroring loudly.
+    frame_id: 'head_front_camera_color_optical_frame'
+
+    # ----- Output topics -----
+    output_image_topic: 'nit_human_traj_estimation/image'
+    marker_topic: 'nit_human_traj_estimation/markers'
+    pose_array_topic: 'nit_human_traj_estimation/predicted_trajectories'
+
+    # ----- Activation -----
+    activation: false
+    activation_service_name: 'nit_human_traj_estimation/activate'
+    status_service_name: 'nit_human_traj_estimation/status'
+
+    # ----- Visualization -----
+    # Set enable_window to false when running headless (e.g. on a robot),
+    # the node keeps publishing output_image_topic/marker_topic/pose_array_topic
+    # regardless of this flag.
+    enable_window: true
+    window_name: 'TrajMamba ROS Live'
+    show_hud: true
+    show_skeleton: true
+    screenshot_dir: 'figures'
+
+    # ----- RGB/Depth synchronization -----
+    queue_size: 10
+    sync_slop: 0.08
+
+    # ----- Multi-person tracking -----
+    max_people: 4
+    max_match_dist: 0.8
+    max_misses: 15

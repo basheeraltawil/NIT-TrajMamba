@@ -1,0 +1,70 @@
+name: jazzy-ci
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: colcon build (ROS 2 Jazzy)
+    runs-on: ubuntu-24.04
+    container:
+      image: ros:jazzy-ros-base
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: ws/src/repo
+
+      - name: Install build tooling
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            python3-rosdep \
+            build-essential
+
+      - name: Init/update rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+          rosdep update
+
+      - name: Install package dependencies (rosdep)
+        working-directory: ws
+        run: |
+          apt-get update
+          . /opt/ros/jazzy/setup.sh
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: colcon build
+        working-directory: ws
+        run: |
+          . /opt/ros/jazzy/setup.sh
+          colcon build --symlink-install --event-handlers console_direct+
+
+      - name: Sanity-check the executable was registered
+        working-directory: ws
+        run: |
+          . install/setup.sh
+          echo "--- ros2 pkg list | grep nit_human_traj_estimation ---"
+          ros2 pkg list | grep nit_human_traj_estimation
+
+          echo "--- ros2 pkg executables nit_human_traj_estimation ---"
+          ros2 pkg executables nit_human_traj_estimation
+
+          echo "--- ros2 launch --show-args (no nodes started) ---"
+          ros2 launch nit_human_traj_estimation human_traj_estimation_launch.py --show-args
+
+      - name: Upload build/log artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: colcon-logs-jazzy
+          path: |
+            ws/log
+          if-no-files-found: ignore
