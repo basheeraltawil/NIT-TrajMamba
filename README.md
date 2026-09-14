@@ -1,120 +1,328 @@
-[![build](https://github.com/ovgu-nit/nit_human_traj_estimation/actions/workflows/build.yaml/badge.svg)](https://github.com/ovgu-nit/nit_human_traj_estimation/actions/workflows/build.yaml)[![jazzy-ci](https://github.com/ovgu-nit/nit_human_traj_estimation/actions/workflows/jazzy-ci.yaml/badge.svg)](https://github.com/ovgu-nit/nit_human_traj_estimation/actions/workflows/jazzy-ci.yaml)[![test](https://github.com/ovgu-nit/nit_human_traj_estimation/actions/workflows/test.yaml/badge.svg)](https://github.com/ovgu-nit/nit_human_traj_estimation/actions/workflows/test.yaml)
----
-# nit_human_traj_estimation
-ROS2 package for multi-person 3D trajectory estimation and future-trajectory prediction, using MediaPipe Pose (hip-centre detection + depth deprojection) and a TrajMamba (Mamba SSM) model for prediction.
+
+
+# TrajMamba — Real-Time Human Trajectory Prediction from RGB-D
+
+Official implementation of:
+
+> **Real-Time Human Trajectory Prediction from RGB-D for Mobile Robots Using Bi-Mamba**
+> Basheer Al-Tawil, Magnus Jung, Ayoub Al-Hamadi
+> *International Conference on Control, Mechatronics and Automation (ICCMA), 2026*
+> [[Paper]](https://doi.org/PLACEHOLDER) · 
+
+A ROS 2 package for multi-person 3D trajectory estimation and short-horizon
+future-trajectory prediction. It detects the hip centre with MediaPipe Pose,
+deprojects it to 3D using depth, and predicts the next 3 seconds of motion with
+**TrajMamba** — a lightweight bidirectional Mamba (selective state space) model
+with a GRU decoder.
+
+The model has **~262K parameters** and runs in real time on-board an NVIDIA
+Jetson Orin.
 
 ![Human Trajectory Estimation](docs/human_traj.png)
 
-## Nav2 social costmap integration
+---
 
-This package's predicted-trajectory `MarkerArray` output feeds a Nav2 local
-costmap layer via two sibling packages in `human_traj_nav/`:
-`social_traj_bridge` and `social_traj_costmap_plugin`. See
-[`human-traj-social-nav-integration.md`](human-traj-social-nav-integration.md)
-for the full design, and [`../README.md`](../README.md) for the three-package
-layout.
+## Key idea: one pipeline for training and deployment
 
-## Running the Node
+Most trajectory predictors are trained on clean, smoothed, top-down benchmark
+tracks, then deployed on noisy pose landmarks and gap-ridden depth from a
+forward-facing camera — an input distribution the model never saw during
+training.
 
-### Option A — via nit_smach (robot deployment)
+This package removes that gap by construction. **The same preprocessing module
+runs in both phases**: identical RGB-depth association, MediaPipe pose
+extraction, depth back-projection, and Kalman/EMA filtering. Normalisation
+statistics are stored inside the checkpoint, so the deployed node cannot
+normalise its input differently from how the model was trained.
+
+---
+
+## Results
+
+ETH/UCY benchmark, leave-one-scene-out protocol, deterministic (*K* = 1)
+predictions. ADE / FDE in metres, lower is better.
+
+| Scene | STGAT | Social-STGCNN | DTGAN | **TrajMamba (ours)** |
+|-------|-------|---------------|-------|----------------------|
+| ETH   | 0.57 / 0.89 | 0.64 / 1.11 | 0.68 / 1.43 | **0.55 / 0.85** |
+| UNIV  | 0.49 / 0.96 | 0.44 / 0.79 | 0.51 / 1.07 | **0.31 / 0.58** |
+| ZARA1 | 0.29 / 0.59 | 0.34 / 0.53 | 0.31 / 0.67 | **0.22 / 0.38** |
+| ZARA2 | 0.24 / 0.54 | 0.30 / 0.48 | 0.28 / 0.59 | **0.17 / 0.31** |
+| HOTEL | 0.41 / 0.86 | 0.49 / 0.85 | 0.30 / 0.52 | **0.20 / 0.43** |
+| **AVG** | 0.40 / 0.77 | 0.44 / 0.75 | 0.42 / 0.85 | **0.29 / 0.51** |
+
+Full comparison against all eight baselines is in the paper.
+
+---
+
+## Requirements
+
+- **ROS 2** Humble or Jazzy
+- **Python** 3.10+
+- Synchronised **RGB + depth + CameraInfo** topics (RealSense, TIAGo head
+  camera, or any equivalent)
+- Python packages not covered by `rosdep` — see [`requirements.txt`](requirements.txt):
+  `torch`, `mediapipe`, `requests`
+
+### Model files
+
+A trained TrajMamba checkpoint (`best_model.pth`) and a MediaPipe
+`pose_landmarker.task` file are required. Both are **downloaded automatically on
+first run** from `checkpoints_url` if not already present locally — see
+[`checkpoints/README.md`](checkpoints/README.md). If the download fails, the node
+falls back to whatever is already on disk.
+
+---
+
+## Installation
+
 ```bash
-ros2 launch nit_smach run_module.launch.py robot:=tiago module:=nit_human_traj_estimation module_pkg:=nit_human_traj_estimation module_launch_file:=human_traj_estimation_launch.py
-ros2 run nit_smach activate_module_sm --ros-args -p module:=nit_human_traj_estimation -p activate:=true -p robot:=tiago
-ros2 run nit_smach activate_module_sm --ros-args -p module:=nit_human_traj_estimation -p activate:=false -p robot:=tiago
+# 1. Clone into your ROS 2 workspace
+mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
+git clone https://github.com/ovgu-nit/nit_human_traj_estimation.git
+
+# 2. Install dependencies
+cd ~/ros2_ws
+rosdep install --from-paths src --ignore-src -r -y
+pip install -r src/nit_human_traj_estimation/requirements.txt
+
+# 3. Build
+colcon build --packages-select nit_human_traj_estimation
+source install/setup.bash
 ```
 
-### Option B — direct launch
+---
+
+## Quick start
+
 ```bash
 ros2 launch nit_human_traj_estimation human_traj_estimation_launch.py
 ```
 
-If you're running from a conda environment with a Jetson-matched `torch` build for GPU (see [GPU note](#gpu-on-jetson) below):
-```bash
-conda activate trajectory
-export PYTHONPATH=/home/basheer/miniforge3/envs/trajectory/lib/python3.10/site-packages:/home/basheer/.local/lib/python3.10/site-packages:/usr/lib/python3/dist-packages
-export LD_LIBRARY_PATH=/home/basheer/miniforge3/envs/trajectory/lib
-source ~/basheer_ws/install/setup.bash
-ros2 launch nit_human_traj_estimation human_traj_estimation_launch.py
-```
+The node starts **idle** by default. Activate processing with:
 
-#### Activate / deactivate processing
 ```bash
 ros2 service call /nit_human_traj_estimation/activate std_srvs/srv/SetBool "{data: true}"
+```
+
+Check status at any time:
+
+```bash
 ros2 service call /nit_human_traj_estimation/status std_srvs/srv/Trigger "{}"
 ```
 
-#### View the result
-- Local live window (default `enable_window:=true`): skeletons, observed trail, predicted trajectory with uncertainty cone, depth gauge, HUD. Keys: `q` quit, `s` screenshot, `h` toggle HUD, `k` toggle skeleton.
-- Or subscribe to the output topics below (works regardless of `enable_window`).
+To start processing immediately instead, set `activation: true` in
+[`config/config.yaml`](config/config.yaml).
 
-## Requirements
-- ROS 2 Humble
-- A trained TrajMamba checkpoint (`best_model.pth`) and a MediaPipe `pose_landmarker.task` file. Auto-downloaded on first run from `checkpoints_url` if not already present locally (see [`checkpoints/README.md`](checkpoints/README.md)) — requires the `requests` pip package and network access; falls back to whatever's already local if the download fails.
-- Python deps not covered by `rosdep`: see `requirements.txt` (`torch`, `mediapipe`, `requests`)
-- Synchronized RGB + depth + CameraInfo topics (e.g. RealSense, TIAGo head camera)
+### Viewing the output
 
-### GPU on Jetson
-Generic `pip install torch` resolves to a build compiled against a newer CUDA version than the Jetson driver stack supports, and silently falls back to CPU. Use NVIDIA's Jetson-specific `torch` wheel (matching your JetPack/L4T version — check `cat /etc/nv_tegra_release`) instead. This package uses the `trajectory` conda env, which already has a working Jetson `torch` build. Two things matter for it to actually take effect:
+With `enable_window: true` (the default), a live OpenCV window shows the
+skeletons, the observed trail, the predicted trajectory with its uncertainty
+cone, a depth gauge, and an FPS/status HUD.
 
-1. **`export PYTHONPATH`** so the conda env can see ROS's own system packages (`catkin_pkg`, etc.) alongside its own — without this, `rqt`-family tools and some ROS introspection break inside the conda env:
+| Key | Action |
+|-----|--------|
+| `q` | Quit |
+| `s` | Save screenshot |
+| `h` | Toggle HUD |
+| `k` | Toggle skeleton overlay |
+
+For headless robot deployment set `enable_window: false`. Output topics are
+published either way:
+
+| Topic | Type | Contents |
+|-------|------|----------|
+| `nit_human_traj_estimation/image` | `sensor_msgs/Image` | Annotated visualisation |
+| `nit_human_traj_estimation/markers` | `visualization_msgs/MarkerArray` | Predicted trajectories as line strips (RViz) |
+| `nit_human_traj_estimation/predicted_trajectories` | `geometry_msgs/PoseArray` | Predicted trajectories as poses |
+
+---
+
+## GPU on Jetson
+
+> Skip this section if you are running on a desktop GPU or CPU.
+
+A generic `pip install torch` resolves to a build compiled against a newer CUDA
+version than the Jetson driver stack supports, and **silently falls back to
+CPU**. Use NVIDIA's Jetson-specific `torch` wheel matching your JetPack/L4T
+version — check with `cat /etc/nv_tegra_release`.
+
+If you install that wheel into a conda environment, two things matter:
+
+**1. Export `PYTHONPATH`** so the conda environment can also see ROS's system
+packages (`catkin_pkg` and friends). Without this, `rqt`-family tools and some
+ROS introspection break inside the environment:
+
 ```bash
-   conda activate trajectory
-   export PYTHONPATH=/home/basheer/miniforge3/envs/trajectory/lib/python3.10/site-packages:$PYTHONPATH:/usr/lib/python3/dist-packages
+conda activate trajectory
+export PYTHONPATH=$CONDA_PREFIX/lib/python3.10/site-packages:$PYTHONPATH:/usr/lib/python3/dist-packages
 ```
-2. **Build with the same env active that you'll launch from** — the built executable's shebang line is pinned to whichever `python3` was active at `colcon build` time, and does *not* change just because you `conda activate` something else afterward:
+
+**2. Build with the same environment active that you will launch from.** The
+built executable's shebang is pinned to whichever `python3` was active at
+`colcon build` time, and does *not* change when you `conda activate` something
+else afterwards:
+
 ```bash
-   conda activate trajectory
-   cd ~/basheer_ws
-   rm -rf build/nit_human_traj_estimation install/nit_human_traj_estimation log
-   colcon build --packages-select nit_human_traj_estimation
+conda activate trajectory
+cd ~/ros2_ws
+rm -rf build/nit_human_traj_estimation install/nit_human_traj_estimation log
+colcon build --packages-select nit_human_traj_estimation
+source install/setup.bash
+ros2 launch nit_human_traj_estimation human_traj_estimation_launch.py
 ```
 
-Check `Device: cuda` (not `cpu`) in the node's startup log to confirm.
+Confirm with `Device: cuda` (not `cpu`) in the node's startup log.
 
-## Parameters
-All parameters live in [`config/config.yaml`](config/config.yaml) and are loaded by the launch file — edit that file for a deployment, or pass `config_file:=/path/to/other.yaml` to use a different one.
+---
+
+## Configuration
+
+All parameters live in [`config/config.yaml`](config/config.yaml) and are loaded
+by the launch file. Edit that file for a deployment, or point at a different one:
+
+```bash
+ros2 launch nit_human_traj_estimation human_traj_estimation_launch.py \
+  config_file:=/path/to/other.yaml
+```
+
+<details>
+<summary><b>Full parameter reference</b> (click to expand)</summary>
+
+### Model and input
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `checkpoint_path` | string | `checkpoints/best_model.pth` | TrajMamba checkpoint (relative → resolved against install share dir) |
+| `checkpoint_path` | string | `checkpoints/best_model.pth` | TrajMamba checkpoint (relative paths resolve against the install share dir) |
 | `pose_landmarker_task` | string | `checkpoints/pose_landmarker.task` | MediaPipe Pose Landmarker task file |
-| `checkpoints_url` | string | *(OVGU cloud share)* | Nextcloud folder share to auto-download missing checkpoint file(s) from — see [`checkpoints/README.md`](checkpoints/README.md) |
-| `rgb_topic` | string | `/head_front_camera/rgb/image_raw` | Input RGB image topic (`Image` or `.../compressed`) |
-| `depth_topic` | string | `/head_front_camera/depth/image_raw` | Input depth image topic |
-| `camera_info_topic` | string | `/head_front_camera/rgb/camera_info` | Input camera info (required before any frame is processed) |
+| `checkpoints_url` | string | *(OVGU cloud share)* | Folder share used to auto-download missing model files |
+| `rgb_topic` | string | `/head_front_camera/rgb/image_raw` | Input RGB topic (`Image` or `.../compressed`) |
+| `depth_topic` | string | `/head_front_camera/depth/image_raw` | Input depth topic |
+| `camera_info_topic` | string | `/head_front_camera/rgb/camera_info` | Camera info — required before any frame is processed |
 | `frame_id` | string | `head_front_camera_rgb_frame` | Frame ID for published messages |
-| `output_image_topic` | string | `nit_human_traj_estimation/image` | Output: annotated visualization image |
-| `marker_topic` | string | `nit_human_traj_estimation/markers` | Output: predicted trajectories as `MarkerArray` (line strips) |
-| `pose_array_topic` | string | `nit_human_traj_estimation/predicted_trajectories` | Output: predicted trajectories as `PoseArray` |
-| `activation` | bool | `false` | Whether the node is processing frames at startup (matches `nit_pose_estimation`'s convention — start idle, let `nit_smach` activate) |
-| `activation_service_name` | string | `/nit_human_traj_estimation/activate` | `SetBool` service to activate/deactivate processing |
+
+### Output
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `output_image_topic` | string | `nit_human_traj_estimation/image` | Annotated visualisation image |
+| `marker_topic` | string | `nit_human_traj_estimation/markers` | Predicted trajectories as `MarkerArray` |
+| `pose_array_topic` | string | `nit_human_traj_estimation/predicted_trajectories` | Predicted trajectories as `PoseArray` |
+
+### Activation
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `activation` | bool | `false` | Whether the node processes frames at startup |
+| `activation_service_name` | string | `/nit_human_traj_estimation/activate` | `SetBool` service to activate/deactivate |
 | `status_service_name` | string | `/nit_human_traj_estimation/status` | `Trigger` service reporting active/inactive |
-| `enable_window` | bool | `true` | Show local `cv2` live window (set `false` for headless robot deployment — outputs still publish either way) |
-| `window_name` | string | `TrajMamba ROS Live` | Title of the cv2 window |
-| `show_hud` | bool | `true` | Show FPS/status HUD overlay |
-| `show_skeleton` | bool | `true` | Draw MediaPipe pose skeleton overlay |
-| `screenshot_dir` | string | `figures` | Directory for `s`-key screenshots (relative → resolved against install share dir) |
+
+### Visualisation
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enable_window` | bool | `true` | Show the local OpenCV window (`false` for headless) |
+| `window_name` | string | `TrajMamba ROS Live` | Window title |
+| `show_hud` | bool | `true` | Show the FPS/status HUD overlay |
+| `show_skeleton` | bool | `true` | Draw the MediaPipe pose skeleton |
+| `screenshot_dir` | string | `figures` | Destination for `s`-key screenshots |
+
+### Synchronisation and tracking
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
 | `queue_size` | int | `10` | RGB/depth `ApproximateTimeSynchronizer` queue size |
-| `sync_slop` | double | `0.08` | RGB/depth synchronization tolerance (seconds) |
-| `max_people` | int | `4` | Max simultaneously tracked people |
+| `sync_slop` | double | `0.08` | RGB/depth synchronisation tolerance (seconds) |
+| `max_people` | int | `4` | Maximum simultaneously tracked people |
 | `max_match_dist` | double | `0.8` | Max 3D distance (m) to associate a detection with an existing track |
-| `max_misses` | int | `15` | Frames a track survives with no matching detection before being dropped |
+| `max_misses` | int | `15` | Frames a track survives without a match before being dropped |
 
-### Prediction behavior
-Each tracked person needs `obs_len` observed frames (from the checkpoint's config, typically 20) before TrajMamba starts predicting; until then they're drawn as an observed-only trail. Multi-person tracking is a simple nearest-neighbor associator (`max_match_dist`/`max_misses`), independent per person — TrajMamba runs once per tracked person, per frame.
+</details>
 
-## Training / Evaluation
-`training/` contains the TrajMamba training pipeline — **not** part of the installed ROS package (no `__init__.py`, not picked up by `setup.py`'s `find_packages()`), since it needs `matplotlib`/full `torch` and has nothing to do with the ROS runtime.
+### Prediction behaviour
+
+Each tracked person needs `obs_len` observed frames (taken from the checkpoint's
+config, typically 20 at 10 Hz — about 2 seconds) before TrajMamba begins
+predicting. Until then they are drawn as an observed-only trail.
+
+Multi-person tracking uses a nearest-neighbour associator
+(`max_match_dist` / `max_misses`). **Prediction is independent per person** —
+TrajMamba runs once per tracked person, per frame. Social interaction between
+people is not modelled; this is the main known limitation and the focus of
+ongoing work.
+
+---
+
+## Training and evaluation
+
+The [`training/`](training/) directory contains the TrajMamba training pipeline.
+It is **not** part of the installed ROS package — it requires `matplotlib` and a
+full `torch` install, and has nothing to do with the ROS runtime.
 
 ```bash
 cd training
-python3 train_mamba.py --dataset_roots /path/to/rgbd_bonn_dataset --checkpoint_dir ./checkpoints
-python3 evaluate.py --checkpoint ./checkpoints/best_model.pth --dataset_roots /path/to/rgbd_bonn_dataset --plot
+
+# Train
+python3 train_mamba.py \
+  --dataset_roots /path/to/rgbd_bonn_dataset \
+  --checkpoint_dir ./checkpoints
+
+# Evaluate
+python3 evaluate.py \
+  --checkpoint ./checkpoints/best_model.pth \
+  --dataset_roots /path/to/rgbd_bonn_dataset \
+  --plot
 ```
 
-Note: `training/mamba_model.py` is intentionally a separate copy from `nit_human_traj_estimation/mamba_model.py` (the runtime one) — the training pipeline stays a standalone, non-ROS tool, while the deployed node bundles its own copy so it doesn't depend on anything outside the installed package. Keep both in sync if you change the architecture.
+> **Note:** `training/mamba_model.py` is intentionally a separate copy from the
+> runtime `nit_human_traj_estimation/mamba_model.py`. The training pipeline stays
+> a standalone, non-ROS tool, while the deployed node bundles its own copy so it
+> does not depend on anything outside the installed package. **Keep both in sync
+> if you change the architecture.**
 
-## CI
-- `build.yaml` — builds the package with `colcon` on ROS 2 Humble on every push.
-- `jazzy-ci.yaml` — same, but against ROS 2 Jazzy.
-- `test.yaml` — runs `ament` lint/style checks (non-blocking).
+---
+
+## Continuous integration
+
+| Workflow | Purpose |
+|----------|---------|
+| [`build.yaml`](.github/workflows/build.yaml) | `colcon` build on ROS 2 Humble, every push |
+| [`jazzy-ci.yaml`](.github/workflows/jazzy-ci.yaml) | Same, against ROS 2 Jazzy |
+| [`test.yaml`](.github/workflows/test.yaml) | `ament` lint and style checks (non-blocking) |
+
+---
+
+## Citation
+
+If you use this work, please cite:
+
+```bibtex
+@inproceedings{altawil2026trajmamba,
+  title     = {Real-Time Human Trajectory Prediction from {RGB-D} for Mobile
+               Robots Using Bi-Mamba},
+  author    = {Al-Tawil, Basheer and Herrmann, Malte and Al-Hamadi, Ayoub},
+  booktitle = {International Conference on Control, Mechatronics and Automation
+               (ICCMA)},
+  year      = {2026}
+}
+```
+
+---
+
+## Acknowledgment
+
+This research was supported in part by the Federal Ministry of Research,
+Technology and Space of Germany (BMFTR) through the project Edison (grant
+no. 13N17576); in part by the European Regional Development Fund (ERDF) through
+the project ENABLING (grant no. ZS/2023/12/182056); and in part by the ERDF
+through the project ORAKEL (grant no. ZS/2023/12/182322), funded by the European
+Union and the state of Saxony-Anhalt.
+
+## Contact
+
+Basheer Al-Tawil — [basheer.al-tawil@ovgu.de](mailto:basheer.al-tawil@ovgu.de)
+Neuro-Information Technology Group, Otto von Guericke University Magdeburg
+
+## License
+
+Released under the MIT License — see [`LICENSE`](LICENSE).
