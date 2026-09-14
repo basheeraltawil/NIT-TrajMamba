@@ -1,6 +1,6 @@
 
 
-# TrajMamba — Real-Time Human Trajectory Prediction from RGB-D
+# NIT-TrajMamba — Real-Time Human Trajectory Prediction from RGB-D
 
 Official implementation of:
 
