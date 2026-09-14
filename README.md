@@ -2,8 +2,6 @@
 
 # NIT-TrajMamba — Real-Time Human Trajectory Prediction from RGB-D
 
-Official implementation of:
-
 > **Real-Time Human Trajectory Prediction from RGB-D for Mobile Robots Using Bi-Mamba**
 > Basheer Al-Tawil, Magnus Jung, Ayoub Al-Hamadi
 > *International Conference on Control, Mechatronics and Automation (ICCMA), 2026*
