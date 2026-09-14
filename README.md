@@ -292,6 +292,4 @@ Union and the state of Saxony-Anhalt.
 Basheer Al-Tawil — [basheer.al-tawil@ovgu.de](mailto:basheer.al-tawil@ovgu.de)
 Neuro-Information Technology Group, Otto von Guericke University Magdeburg
 
-## License
 
-Released under the MIT License — see [`LICENSE`](LICENSE).
