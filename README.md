@@ -79,7 +79,7 @@ falls back to whatever is already on disk.
 ```bash
 # 1. Clone into your ROS 2 workspace
 mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
-git clone https://github.com/ovgu-nit/nit_human_traj_estimation.git
+git clone https://github.com/basheeraltawil/NIT-TrajMamba.git
 
 # 2. Install dependencies
 cd ~/ros2_ws
