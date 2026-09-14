@@ -300,7 +300,7 @@ If you use this work, please cite:
 @inproceedings{altawil2026trajmamba,
   title     = {Real-Time Human Trajectory Prediction from {RGB-D} for Mobile
                Robots Using Bi-Mamba},
-  author    = {Al-Tawil, Basheer and Herrmann, Malte and Al-Hamadi, Ayoub},
+  author    = {Al-Tawil, Basheer and Jung, Magnus and Al-Hamadi, Ayoub},
   booktitle = {International Conference on Control, Mechatronics and Automation
                (ICCMA)},
   year      = {2026}
